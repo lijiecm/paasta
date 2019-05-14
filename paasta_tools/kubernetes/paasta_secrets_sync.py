@@ -13,22 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import argparse
-import base64
 import json
 import logging
 import os
 import sys
 from typing import Mapping
-from typing import Optional
 from typing import Sequence
 
-from kubernetes.client import V1ConfigMap
-from kubernetes.client import V1ObjectMeta
-from kubernetes.client import V1Secret
 from kubernetes.client.rest import ApiException
 
+from paasta_tools.kubernetes_tools import create_kubernetes_secret_signature
+from paasta_tools.kubernetes_tools import create_secret
+from paasta_tools.kubernetes_tools import get_kubernetes_secret_signature
 from paasta_tools.kubernetes_tools import KubeClient
-from paasta_tools.secret_providers import BaseSecretProvider
+from paasta_tools.kubernetes_tools import update_kubernetes_secret_signature
+from paasta_tools.kubernetes_tools import update_secret
 from paasta_tools.secret_tools import get_secret_provider
 from paasta_tools.utils import DEFAULT_SOA_DIR
 from paasta_tools.utils import load_system_paasta_config
@@ -181,99 +180,6 @@ def sync_secrets(
                     else:
                         log.info(f"{secret} for {service} up to date")
     return True
-
-
-def create_secret(
-    kube_client: KubeClient,
-    secret: str,
-    service: str,
-    secret_provider: BaseSecretProvider,
-) -> None:
-    kube_client.core.create_namespaced_secret(
-        namespace="paasta",
-        body=V1Secret(
-            metadata=V1ObjectMeta(
-                name=f"paasta-secret-{service}-{secret}",
-                labels={"yelp.com/paasta_service": service},
-            ),
-            data={secret: base64.b64encode(secret_provider.decrypt_secret_raw(secret)).decode('utf-8')},
-        ),
-    )
-
-
-def update_secret(
-    kube_client: KubeClient,
-    secret: str,
-    service: str,
-    secret_provider: BaseSecretProvider,
-) -> None:
-    kube_client.core.replace_namespaced_secret(
-        name=f"paasta-secret-{service}-{secret}",
-        namespace="paasta",
-        body=V1Secret(
-            metadata=V1ObjectMeta(
-                name=f"paasta-secret-{service}-{secret}",
-                labels={"yelp.com/paasta_service": service},
-            ),
-            data={secret: base64.b64encode(secret_provider.decrypt_secret_raw(secret)).decode('utf-8')},
-        ),
-    )
-
-
-def get_kubernetes_secret_signature(
-    kube_client: KubeClient,
-    secret: str,
-    service: str,
-) -> Optional[str]:
-    try:
-        signature = kube_client.core.read_namespaced_config_map(
-            name=f"paasta-secret-{service}-{secret}-signature",
-            namespace="paasta",
-        )
-    except ApiException as e:
-        if e.status == 404:
-            signature = None
-    if not signature:
-        return None
-    else:
-        return signature.data['signature']
-
-
-def update_kubernetes_secret_signature(
-    kube_client: KubeClient,
-    secret: str,
-    service: str,
-    secret_signature: str,
-) -> None:
-    kube_client.core.replace_namespaced_config_map(
-        name=f"paasta-secret-{service}-{secret}-signature",
-        namespace="paasta",
-        body=V1ConfigMap(
-            metadata=V1ObjectMeta(
-                name=f"paasta-secret-{service}-{secret}-signature",
-                labels={"yelp.com/paasta_service": service},
-            ),
-            data={'signature': secret_signature},
-        ),
-    )
-
-
-def create_kubernetes_secret_signature(
-    kube_client: KubeClient,
-    secret: str,
-    service: str,
-    secret_signature: str,
-) -> None:
-    kube_client.core.create_namespaced_config_map(
-        namespace="paasta",
-        body=V1ConfigMap(
-            metadata=V1ObjectMeta(
-                name=f"paasta-secret-{service}-{secret}-signature",
-                labels={"yelp.com/paasta_service": service},
-            ),
-            data={'signature': secret_signature},
-        ),
-    )
 
 
 if __name__ == '__main__':
