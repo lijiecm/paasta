@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import json
 import os
 import tempfile
 from datetime import datetime
@@ -62,6 +63,19 @@ def step_impl_given(context):
     context.test_git_repo.refs[b'refs/heads/master'] = commit.id
     context.expected_commit_as_bytes = commit.id
     context.expected_commit = context.expected_commit_as_bytes.decode()
+
+
+@given('a valid system paasta config')
+def generate_system_paasta_config(context):
+    system_paasta_config_dir = os.environ['PAASTA_SYSTEM_CONFIG_DIR']
+    if not os.path.exists(system_paasta_config_dir):
+        os.makedirs(system_paasta_config_dir)
+    with open('%s/clusters.json' % system_paasta_config_dir, 'w+') as f:
+        f.write(json.dumps({
+            'clusters': [
+                'test_cluster',
+            ],
+        }))
 
 
 @when('paasta mark-for-deployments is run against the repo')
